@@ -1,15 +1,55 @@
 use std::collections::HashMap;
 
-use crate::{FieldPredictor, frame::{BodyFrame, data::{OwnedIFrame, OwnedPFrame}}};
+use num_rational::Ratio;
+
+use crate::frame::{
+    data::{OwnedGFrame, OwnedHFrame, OwnedIFrame, OwnedPFrame, OwnedSFrame},
+    event, BodyFrame,
+};
 
 use super::header::{Header, IPField};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FieldPredictor {
+    None,
+    Previous,
+    StraightLine,
+    Average2,
+    MinThrottle,
+    Motor0,
+    Increment,
+    HomeCoordinates,
+    Around1500,
+    VBatRef,
+    LastMainFrameTime,
+    MinMotor,
+}
+
+impl Default for FieldPredictor {
+    fn default() -> Self {
+        FieldPredictor::None
+    }
+}
 
 pub(crate) struct History {
     history: [Vec<i64>; 2],
     current: Vec<i64>,
     previous_2_ix: usize,
     previous_ix: usize,
+}
+
+pub(crate) struct GNSSHistory {
+    gnss_home: [i64; 2],
+    pub(crate) history: History,
+}
+
+impl GNSSHistory {
+    pub fn with_size(cap: usize) -> Self {
+        Self {
+            gnss_home: Default::default(),
+            history: History::with_size(cap),
+        }
+    }
 }
 
 pub(crate) struct Snapshot<'a> {
@@ -51,47 +91,82 @@ impl History {
     }
 }
 
+pub enum LogRecord<'a> {
+    Main(&'a [i64]),
+    GNSS(&'a [i64]),
+    Slow(Vec<i64>),
+    Event(event::Frame),
+}
+
 pub struct LogProcessor {
-    history: History,
+    ip_history: History,
+    gnss_history: GNSSHistory,
     i_predictors: Vec<AnyIPredictor>,
     p_predictors: Vec<AnyPPredictor>,
+    g_predictors: Vec<AnyGPredictor>,
 }
 
 impl LogProcessor {
     pub fn new(header: &Header) -> Self {
         let i_predictors = header.i_field_predictors.clone();
         let p_predictors = header.p_field_predictors.clone();
+        let g_predictors = header.g_field_predictors.clone();
 
         assert_eq!(i_predictors.len(), p_predictors.len());
 
         Self {
-            history: History::with_size(i_predictors.len()),
+            ip_history: History::with_size(i_predictors.len()),
+            gnss_history: GNSSHistory::with_size(g_predictors.len()),
             i_predictors,
             p_predictors,
+            g_predictors,
         }
     }
 
-    pub fn process_frame(&mut self, frame: BodyFrame) -> Option<&[i64]> {
+    pub(crate) fn process_frame<'a>(&'a mut self, frame: BodyFrame) -> Option<LogRecord<'a>> {
         match frame {
-            BodyFrame::IFrame(OwnedIFrame {buf}) => {
+            BodyFrame::IFrame(OwnedIFrame { buf }) => {
                 assert_eq!(buf.len(), self.i_predictors.len());
-                let mut snapshot = self.history.state();
+                let mut snapshot = self.ip_history.state();
                 for (in_value, predictor) in buf.into_iter().zip(self.i_predictors.iter()) {
                     predictor.predict(in_value, &mut snapshot);
                 }
-                self.history.advance_reset();
-                Some(self.history.values())
+                self.ip_history.advance_reset();
+                Some(LogRecord::Main(self.ip_history.values()))
             }
-            BodyFrame::PFrame(OwnedPFrame {buf}) => {
+            BodyFrame::PFrame(OwnedPFrame { buf }) => {
                 assert_eq!(buf.len(), self.p_predictors.len());
-                let mut snapshot = self.history.state();
-                for (in_value, predictor) in buf.into_iter().zip(self.p_predictors.iter()) {
+                let mut snapshot = self.ip_history.state();
+                for (in_value, predictor) in buf.into_iter().zip(self.p_predictors.iter_mut()) {
                     predictor.predict(in_value, &mut snapshot);
                 }
-                self.history.advance();
-                Some(self.history.values())
+                self.ip_history.advance();
+                Some(LogRecord::Main(self.ip_history.values()))
             }
-            _ => None,
+            BodyFrame::HFrame(OwnedHFrame { buf }) => {
+                assert!(buf.len() == 2);
+                self.gnss_history.gnss_home[0] = buf[0];
+                self.gnss_history.gnss_home[1] = buf[1];
+
+                None
+            }
+            BodyFrame::GFrame(OwnedGFrame { buf }) => {
+                assert_eq!(buf.len(), self.g_predictors.len());
+                let mut snapshot = self.gnss_history.history.state();
+                for (in_value, predictor) in buf.into_iter().zip(self.g_predictors.iter_mut()) {
+                    predictor.predict(
+                        in_value,
+                        &mut snapshot,
+                        &self.ip_history.state(),
+                        self.gnss_history.gnss_home,
+                    );
+                }
+                self.gnss_history.history.advance();
+
+                Some(LogRecord::GNSS(self.gnss_history.history.values()))
+            }
+            BodyFrame::SFrame(OwnedSFrame { buf }) => Some(LogRecord::Slow(buf)),
+            BodyFrame::Event(frame) => Some(LogRecord::Event(frame)),
         }
     }
 }
@@ -103,14 +178,41 @@ pub(crate) enum AnyIPredictor {
 }
 
 impl AnyIPredictor {
-    pub fn new(predictor: FieldPredictor, settings: &HashMap<String, String>, ip_fields: &HashMap<String, IPField>, field_ix: usize) -> Self {
+    pub fn new(
+        predictor: FieldPredictor,
+        settings: &HashMap<String, String>,
+        ip_fields: &HashMap<String, IPField>,
+        field_ix: usize,
+    ) -> Self {
         match predictor {
-            FieldPredictor::None => AnyIPredictor::AddConstant(AddConstantPredictor { base: 0, field_ix }),
-            FieldPredictor::Around1500 => AnyIPredictor::AddConstant(AddConstantPredictor { base: 1500, field_ix }),
-            FieldPredictor::MinThrottle => AnyIPredictor::AddConstant(AddConstantPredictor { base: settings["minthrottle"].parse().unwrap(), field_ix }),
-            FieldPredictor::Motor0 => AnyIPredictor::AddField(AddFieldPredictor { base_field_ix: ip_fields["motor[0]"].ix, field_ix }),
-            FieldPredictor::MinMotor => AnyIPredictor::AddConstant(AddConstantPredictor { base: settings["motorOutput"].split(',').next().unwrap().parse().unwrap() , field_ix }),
-            FieldPredictor::VBatRef => AnyIPredictor::AddConstant(AddConstantPredictor { base: settings["vbatref"].parse().unwrap(), field_ix }),
+            FieldPredictor::None => {
+                AnyIPredictor::AddConstant(AddConstantPredictor { base: 0, field_ix })
+            }
+            FieldPredictor::Around1500 => AnyIPredictor::AddConstant(AddConstantPredictor {
+                base: 1500,
+                field_ix,
+            }),
+            FieldPredictor::MinThrottle => AnyIPredictor::AddConstant(AddConstantPredictor {
+                base: settings["minthrottle"].parse().unwrap(),
+                field_ix,
+            }),
+            FieldPredictor::Motor0 => AnyIPredictor::AddField(AddFieldPredictor {
+                base_field_ix: ip_fields["motor[0]"].ix,
+                field_ix,
+            }),
+            FieldPredictor::MinMotor => AnyIPredictor::AddConstant(AddConstantPredictor {
+                base: settings["motorOutput"]
+                    .split(',')
+                    .next()
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+                field_ix,
+            }),
+            FieldPredictor::VBatRef => AnyIPredictor::AddConstant(AddConstantPredictor {
+                base: settings["vbatref"].parse().unwrap(),
+                field_ix,
+            }),
             //motorOutput
             p => unimplemented!("{:?}", p),
         }
@@ -138,7 +240,7 @@ pub(crate) struct AddConstantPredictor {
 
 impl IPredictor for AddConstantPredictor {
     fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>) {
-        snapshot.current[self.field_ix] = self.base + value;
+        snapshot.current[self.field_ix] = (self.base + value) as i32 as i64;
     }
 }
 
@@ -156,6 +258,7 @@ impl IPredictor for AddFieldPredictor {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum AnyPPredictor {
+    None(NonePredictor),
     Previous(PreviousPredictor),
     Inc(IncPredictor),
     StraightLine(StraightLinePredictor),
@@ -163,20 +266,30 @@ pub(crate) enum AnyPPredictor {
 }
 
 impl AnyPPredictor {
-    pub fn new(predictor: FieldPredictor, field_ix: usize) -> Self {
+    pub fn new(predictor: FieldPredictor, p_interval: Ratio<u16>, field_ix: usize) -> Self {
         match predictor {
+            FieldPredictor::None => AnyPPredictor::None(NonePredictor { field_ix }),
             FieldPredictor::Previous => AnyPPredictor::Previous(PreviousPredictor { field_ix }),
-            FieldPredictor::Increment => AnyPPredictor::Inc(IncPredictor { field_ix }),
-            FieldPredictor::StraightLine => AnyPPredictor::StraightLine(StraightLinePredictor { field_ix }),
+            FieldPredictor::Increment => {
+                AnyPPredictor::Inc(IncPredictor::new(field_ix, p_interval))
+            }
+            FieldPredictor::StraightLine => {
+                AnyPPredictor::StraightLine(StraightLinePredictor { field_ix })
+            }
             FieldPredictor::Average2 => AnyPPredictor::Average(AveragePredictor { field_ix }),
-            _ => unimplemented!(),
+            _ => unimplemented!("Predictor {:?}", predictor),
         }
+    }
+
+    pub fn none(field_ix: usize) -> Self {
+        AnyPPredictor::None(NonePredictor { field_ix })
     }
 }
 
 impl PPredictor for AnyPPredictor {
-    fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>) {
+    fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>) {
         match self {
+            AnyPPredictor::None(p) => p.predict(value, snapshot),
             AnyPPredictor::Previous(p) => p.predict(value, snapshot),
             AnyPPredictor::Inc(p) => p.predict(value, snapshot),
             AnyPPredictor::StraightLine(p) => p.predict(value, snapshot),
@@ -186,7 +299,18 @@ impl PPredictor for AnyPPredictor {
 }
 
 pub(crate) trait PPredictor: Copy + Clone {
-    fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>);
+    fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>);
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NonePredictor {
+    field_ix: usize,
+}
+
+impl PPredictor for NonePredictor {
+    fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>) {
+        snapshot.current[self.field_ix] = value;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -195,7 +319,7 @@ pub(crate) struct PreviousPredictor {
 }
 
 impl PPredictor for PreviousPredictor {
-    fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>) {
+    fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>) {
         snapshot.current[self.field_ix] = snapshot.previous[self.field_ix] + value;
     }
 }
@@ -203,11 +327,37 @@ impl PPredictor for PreviousPredictor {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct IncPredictor {
     field_ix: usize,
+    increment: Ratio<u16>,
+    running_sum: Ratio<u16>,
+    base: i64,
+    expected_value: i64,
+}
+
+impl IncPredictor {
+    pub fn new(field_ix: usize, p_interval: Ratio<u16>) -> Self {
+        let increment = p_interval.recip();
+        Self {
+            field_ix,
+            running_sum: Ratio::new(0, *increment.denom()),
+            increment,
+            base: 0,
+            expected_value: 0,
+        }
+    }
 }
 
 impl PPredictor for IncPredictor {
-    fn predict(&self, _: i64, snapshot: &mut Snapshot<'_>) {
-        snapshot.current[self.field_ix] = snapshot.previous[self.field_ix] + 1;
+    fn predict(&mut self, _: i64, snapshot: &mut Snapshot<'_>) {
+        if snapshot.current[self.field_ix] != self.expected_value {
+            self.base = snapshot.current[self.field_ix];
+            self.running_sum = Ratio::new(0, *self.increment.denom());
+        }
+
+        self.running_sum += self.increment;
+
+        let current_value = self.base + (self.running_sum.to_integer() as i64);
+        snapshot.current[self.field_ix] = current_value;
+        self.expected_value = current_value;
     }
 }
 
@@ -217,9 +367,10 @@ pub(crate) struct StraightLinePredictor {
 }
 
 impl PPredictor for StraightLinePredictor {
-    fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>) {
+    fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>) {
         // without overflow
-        let next = snapshot.previous[self.field_ix] - snapshot.previous_2[self.field_ix] + snapshot.previous[self.field_ix];
+        let next = snapshot.previous[self.field_ix] - snapshot.previous_2[self.field_ix]
+            + snapshot.previous[self.field_ix];
         snapshot.current[self.field_ix] = next + value;
     }
 }
@@ -230,7 +381,7 @@ pub(crate) struct AveragePredictor {
 }
 
 impl PPredictor for AveragePredictor {
-    fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>) {
+    fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>) {
         let p2 = snapshot.previous_2[self.field_ix];
         let p1 = snapshot.previous[self.field_ix];
         // compute average without overflowing i64
@@ -239,3 +390,99 @@ impl PPredictor for AveragePredictor {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum AnyGPredictor {
+    None(NonePredictor),
+    HomeCoordinates(HomeCoordinatesPredictor),
+    LastMainFrameTime(LastMainFrameTimePredictor),
+}
+
+impl AnyGPredictor {
+    pub fn new(
+        predictor: FieldPredictor,
+        field_ix: usize,
+        index: usize,
+        ip_fields: &HashMap<String, IPField>,
+    ) -> Self {
+        match predictor {
+            FieldPredictor::None => AnyGPredictor::None(NonePredictor { field_ix }),
+            FieldPredictor::HomeCoordinates => {
+                AnyGPredictor::HomeCoordinates(HomeCoordinatesPredictor {
+                    field_ix,
+                    gnss_home_ix: index,
+                })
+            }
+            FieldPredictor::LastMainFrameTime => {
+                AnyGPredictor::LastMainFrameTime(LastMainFrameTimePredictor {
+                    field_ix,
+                    time_ix: ip_fields["time"].ix,
+                })
+            }
+            _ => unimplemented!("Predictor {:?}", predictor),
+        }
+    }
+}
+
+impl GPredictor for AnyGPredictor {
+    fn predict(
+        &mut self,
+        value: i64,
+        snapshot: &mut Snapshot<'_>,
+        ip_snapshot: &Snapshot<'_>,
+        gnss_home: [i64; 2],
+    ) {
+        match self {
+            AnyGPredictor::None(p) => p.predict(value, snapshot),
+            AnyGPredictor::HomeCoordinates(p) => p.predict(value, snapshot, ip_snapshot, gnss_home),
+            AnyGPredictor::LastMainFrameTime(p) => {
+                p.predict(value, snapshot, ip_snapshot, gnss_home)
+            }
+        }
+    }
+}
+
+pub(crate) trait GPredictor: Copy + Clone {
+    fn predict(
+        &mut self,
+        value: i64,
+        snapshot: &mut Snapshot<'_>,
+        ip_snapshot: &Snapshot<'_>,
+        gnss_home: [i64; 2],
+    );
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HomeCoordinatesPredictor {
+    field_ix: usize,
+    gnss_home_ix: usize,
+}
+
+impl GPredictor for HomeCoordinatesPredictor {
+    fn predict(
+        &mut self,
+        value: i64,
+        snapshot: &mut Snapshot<'_>,
+        _ip_snapshot: &Snapshot<'_>,
+        gnss_home: [i64; 2],
+    ) {
+        snapshot.current[self.field_ix] = gnss_home[self.gnss_home_ix] + value;
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LastMainFrameTimePredictor {
+    field_ix: usize,
+    time_ix: usize,
+}
+
+impl GPredictor for LastMainFrameTimePredictor {
+    fn predict(
+        &mut self,
+        value: i64,
+        snapshot: &mut Snapshot<'_>,
+        ip_snapshot: &Snapshot<'_>,
+        _gnss_home: [i64; 2],
+    ) {
+        snapshot.current[self.field_ix] = ip_snapshot.current[self.time_ix] + value;
+    }
+}

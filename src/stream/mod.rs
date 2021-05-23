@@ -1,4 +1,3 @@
-
-pub mod header;
-pub mod data;
-pub mod predictor;
+pub(crate) mod data;
+pub(crate) mod header;
+pub(crate) mod predictor;

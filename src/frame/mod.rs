@@ -1,15 +1,25 @@
-use std::{mem::size_of_val};
+use std::mem::size_of_val;
 
-
-use nom::{IResult, bytes::streaming::{is_not, tag, take, take_until}, combinator::{map, map_res}, error::{Error, ErrorKind, ParseError}, multi::separated_list0, number::{complete::be_u8, streaming::{le_i16, le_i24, le_i32, le_i8, le_u8}}};
+use nom::{
+    branch::alt,
+    bytes::streaming::{is_not, tag, take, take_until},
+    combinator::{map, map_res},
+    error::{Error, ErrorKind, ParseError},
+    multi::separated_list0,
+    number::{
+        complete::be_u8,
+        streaming::{le_i16, le_i24, le_i32, le_i8, le_u8},
+    },
+    IResult,
+};
+use num_rational::Ratio;
 use num_traits::{WrappingShl, WrappingShr};
 
-use crate::FieldPredictor;
+use crate::stream::predictor::FieldPredictor;
 
-
-pub(crate) mod header;
-pub(crate) mod event;
 pub(crate) mod data;
+pub(crate) mod event;
+pub(crate) mod header;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RawFieldEncoding {
@@ -62,8 +72,8 @@ pub(crate) enum Field {
 
 #[inline]
 fn sign_extend<T: WrappingShl + WrappingShr>(x: T, nbits: u32) -> T {
-	let notherbits = size_of_val(&x) as u32 * 8 - nbits;
-  	x.wrapping_shl(notherbits).wrapping_shr(notherbits)
+    let notherbits = size_of_val(&x) as u32 * 8 - nbits;
+    x.wrapping_shl(notherbits).wrapping_shr(notherbits)
 }
 
 impl FieldEncoding {
@@ -73,11 +83,11 @@ impl FieldEncoding {
             FieldEncoding::UnsignedVB => {
                 let (input, varint) = take_varint(input)?;
                 (input, Field::Unsigned(varint))
-            },
+            }
             FieldEncoding::SignedVB => {
                 let (input, varint) = take_varint(input)?;
                 (input, Field::Signed(zigzag_decode(varint)))
-            },
+            }
             FieldEncoding::Negative14BitVB => {
                 let (input, varint) = take_varint(input)?;
                 (input, Field::Signed(-(varint as i32)))
@@ -86,18 +96,37 @@ impl FieldEncoding {
                 let (input, byte1) = be_u8(input)?;
 
                 match byte1 >> 6 {
-                    0b00 => {
-                        (input, Field::SignedTriple([sign_extend((byte1 >> 4) as i32, 2), sign_extend((byte1 >> 2) as i32, 2), sign_extend(byte1 as i32, 2)]))
-                    },
+                    0b00 => (
+                        input,
+                        Field::SignedTriple([
+                            sign_extend((byte1 >> 4) as i32, 2),
+                            sign_extend((byte1 >> 2) as i32, 2),
+                            sign_extend(byte1 as i32, 2),
+                        ]),
+                    ),
                     0b01 => {
                         let (input, byte2) = be_u8(input)?;
-                        (input, Field::SignedTriple([sign_extend(byte1 as i32, 4), sign_extend((byte2 >> 4) as i32, 4), sign_extend(byte2 as i32, 4)]))
-                    },
+                        (
+                            input,
+                            Field::SignedTriple([
+                                sign_extend(byte1 as i32, 4),
+                                sign_extend((byte2 >> 4) as i32, 4),
+                                sign_extend(byte2 as i32, 4),
+                            ]),
+                        )
+                    }
                     0b10 => {
                         let (input, byte2) = be_u8(input)?;
                         let (input, byte3) = be_u8(input)?;
-                        (input, Field::SignedTriple([sign_extend(byte1 as i32, 6), sign_extend(byte2 as i32, 6), sign_extend(byte3 as i32, 6)]))
-                    },
+                        (
+                            input,
+                            Field::SignedTriple([
+                                sign_extend(byte1 as i32, 6),
+                                sign_extend(byte2 as i32, 6),
+                                sign_extend(byte3 as i32, 6),
+                            ]),
+                        )
+                    }
                     0b11 => {
                         let selector1 = byte1 & 0b11;
                         let selector2 = (byte1 >> 2) & 0b11;
@@ -116,18 +145,22 @@ impl FieldEncoding {
                         let (input, value1) = read_value(selector1, input)?;
                         let (input, value2) = read_value(selector2, input)?;
                         let (input, value3) = read_value(selector3, input)?;
-                        
+
                         (input, Field::SignedTriple([value1, value2, value3]))
-                    },
+                    }
                     _ => {
                         unreachable!()
                     }
                 }
-                
             }
             FieldEncoding::Tag8_4S16(_) => {
                 let (input, selectors) = be_u8(input)?;
-                let selectors = [selectors & 0b11, (selectors >> 2) & 0b11, (selectors >> 4) & 0b11, (selectors >> 6) & 0b11];
+                let selectors = [
+                    selectors & 0b11,
+                    (selectors >> 2) & 0b11,
+                    (selectors >> 4) & 0b11,
+                    (selectors >> 6) & 0b11,
+                ];
 
                 fn n_nibbles(selector: u8) -> u8 {
                     match selector {
@@ -190,7 +223,7 @@ impl FieldEncoding {
                 let (mut input, selectors) = be_u8(input)?;
 
                 let mut values = [0i32; 8];
-                
+
                 for i in 0..*fields_n {
                     if selectors & (1 << i) != 0 {
                         let (remaining_input, varint) = take_varint(input)?;
@@ -207,11 +240,13 @@ impl FieldEncoding {
 }
 
 #[derive(Debug)]
-pub enum BodyFrame {
+pub(crate) enum BodyFrame {
     Event(event::Frame),
     IFrame(data::OwnedIFrame),
     PFrame(data::OwnedPFrame),
     SFrame(data::OwnedSFrame),
+    GFrame(data::OwnedGFrame),
+    HFrame(data::OwnedHFrame),
 }
 
 pub(crate) fn parse_body_frame(input: &[u8]) -> IResult<&[u8], BodyFrame> {
@@ -269,14 +304,6 @@ fn field_predictor_from_dec(bytes: &[u8]) -> Result<FieldPredictor, ()> {
     })
 }
 
-fn map_output<I, F, T, FN>(out: (I, F), f: FN) -> (I, T)
-where
-    FN: Fn(F) -> T,
-{
-    let (i, r) = out;
-    (i, f(r))
-}
-
 fn parse_str(input: &[u8]) -> IResult<&[u8], &str> {
     map_res(take_until("\n"), str_from_bytes)(input)
 }
@@ -285,11 +312,31 @@ fn parse_i16_dec(input: &[u8]) -> IResult<&[u8], i16> {
     map_res(take_until("\n"), i16_from_dec)(input)
 }
 
+fn parse_u16_ratio_dec(input: &[u8]) -> IResult<&[u8], Ratio<u16>> {
+    let (input, numer) = map_res(take_until("/"), u16_from_dec)(input)?;
+    let (input, _) = tag("/")(input)?;
+    let (input, denom) = map_res(take_until("\n"), u16_from_dec)(input)?;
+    Ok((input, Ratio::new(numer, denom)))
+}
+
 fn parse_u16_dec(input: &[u8]) -> IResult<&[u8], u16> {
     map_res(take_until("\n"), u16_from_dec)(input)
 }
 
-fn parse_list<'a, F, T, E: ParseError<&'a [u8]>>(input: &'a [u8], parser: F) -> IResult<&'a [u8], Vec<T>> where F: Fn(&'a [u8]) -> Result<T, E> {
+fn parse_u16_ratio_dec_or_inverse_dec(input: &[u8]) -> IResult<&[u8], Ratio<u16>> {
+    alt((
+        parse_u16_ratio_dec,
+        map(parse_u16_dec, |denom| Ratio::new(1, denom)),
+    ))(input)
+}
+
+fn parse_list<'a, F, T, E: ParseError<&'a [u8]>>(
+    input: &'a [u8],
+    parser: F,
+) -> IResult<&'a [u8], Vec<T>>
+where
+    F: Fn(&'a [u8]) -> Result<T, E>,
+{
     separated_list0(tag(","), map_res(is_not(",\n"), parser))(input)
 }
 
@@ -322,7 +369,10 @@ fn take_varint(input: &[u8]) -> IResult<&[u8], u32> {
             return Ok((input, res));
         }
     }
-    Err(nom::Err::Failure(Error::from_error_kind(input, ErrorKind::TooLarge)))
+    Err(nom::Err::Failure(Error::from_error_kind(
+        input,
+        ErrorKind::TooLarge,
+    )))
 }
 
 #[inline]

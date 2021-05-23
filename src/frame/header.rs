@@ -1,9 +1,17 @@
 use chrono::{DateTime, Utc};
-use nom::{IResult, bytes::streaming::{tag, take_until}, combinator::{map, map_res}};
+use nom::{
+    bytes::streaming::{tag, take_until},
+    combinator::{map, map_res},
+    IResult,
+};
+use num_rational::Ratio;
 
-use crate::FieldPredictor;
+use crate::stream::predictor::FieldPredictor;
 
-use super::{RawFieldEncoding, parse_dec_as_bool_list, parse_dec_as_encoding_list, parse_dec_as_predictor_list, parse_i16_dec, parse_str, parse_str_list, parse_u16_dec};
+use super::{
+    parse_dec_as_bool_list, parse_dec_as_encoding_list, parse_dec_as_predictor_list, parse_i16_dec,
+    parse_str, parse_str_list, parse_u16_dec, parse_u16_ratio_dec_or_inverse_dec, RawFieldEncoding,
+};
 
 #[derive(Debug)]
 pub(crate) enum Frame<'f> {
@@ -21,6 +29,14 @@ pub(crate) enum Frame<'f> {
     FieldSSignedness(Vec<bool>),
     FieldSEncoding(Vec<RawFieldEncoding>),
     FieldSPredictor(Vec<FieldPredictor>),
+    FieldGName(Vec<&'f str>),
+    FieldGSignedness(Vec<bool>),
+    FieldGEncoding(Vec<RawFieldEncoding>),
+    FieldGPredictor(Vec<FieldPredictor>),
+    FieldHName(Vec<&'f str>),
+    FieldHSignedness(Vec<bool>),
+    FieldHEncoding(Vec<RawFieldEncoding>),
+    FieldHPredictor(Vec<FieldPredictor>),
     FirmwareType(&'f str),
     FirmwareRevision(&'f str, &'f str, &'f str, &'f str),
     FirmwareDate(DateTime<Utc>),
@@ -28,7 +44,7 @@ pub(crate) enum Frame<'f> {
     LogStart(DateTime<Utc>),
     CraftName(&'f str),
     IInterval(i16),
-    PInterval(i16),
+    PInterval(Ratio<u16>),
     PRatio(u16),
     MinThrottle(u16),
     MaxThrottle(u16),
@@ -102,29 +118,34 @@ pub(crate) fn parse_header(input: &[u8]) -> IResult<&[u8], Frame> {
     let (input, _) = tag("H ")(input)?;
     let (input, name) = map_res(take_until(":"), super::str_from_bytes)(input)?;
     let (input, _) = tag(":")(input)?;
-    // let value = ;
 
     let (input, header_frame) = match name {
         "Product" => map(parse_str, Frame::Product)(input),
         "Data version" => map(parse_str, Frame::DataVersion)(input),
         "I interval" => map(parse_i16_dec, Frame::IInterval)(input),
-        "P interval" => map(parse_i16_dec, Frame::PInterval)(input),
-        "P ratio" => map(parse_u16_dec, Frame::PRatio,)(input),
-        "Field I name" => map(parse_str_list,Frame::FieldIName)(input),
+        "P interval" => map(parse_u16_ratio_dec_or_inverse_dec, Frame::PInterval)(input),
+        "P ratio" => map(parse_u16_dec, Frame::PRatio)(input),
+        "Field I name" => map(parse_str_list, Frame::FieldIName)(input),
         "Field I signed" => map(parse_dec_as_bool_list, Frame::FieldISignedness)(input),
         "Field I encoding" => map(parse_dec_as_encoding_list, Frame::FieldIEncoding)(input),
         "Field I predictor" => map(parse_dec_as_predictor_list, Frame::FieldIPredictor)(input),
-        "Field P name" => map(parse_str_list,Frame::FieldPName)(input),
+        "Field P name" => map(parse_str_list, Frame::FieldPName)(input),
         "Field P signed" => map(parse_dec_as_bool_list, Frame::FieldPSignedness)(input),
         "Field P encoding" => map(parse_dec_as_encoding_list, Frame::FieldPEncoding)(input),
         "Field P predictor" => map(parse_dec_as_predictor_list, Frame::FieldPPredictor)(input),
-        "Field S name" => map(parse_str_list,Frame::FieldSName)(input),
+        "Field S name" => map(parse_str_list, Frame::FieldSName)(input),
         "Field S signed" => map(parse_dec_as_bool_list, Frame::FieldSSignedness)(input),
         "Field S encoding" => map(parse_dec_as_encoding_list, Frame::FieldSEncoding)(input),
         "Field S predictor" => map(parse_dec_as_predictor_list, Frame::FieldSPredictor)(input),
-        name => map(parse_str, |v| {
-            Frame::UnkownHeader(name, v)
-        })(input),
+        "Field G name" => map(parse_str_list, Frame::FieldGName)(input),
+        "Field G signed" => map(parse_dec_as_bool_list, Frame::FieldGSignedness)(input),
+        "Field G encoding" => map(parse_dec_as_encoding_list, Frame::FieldGEncoding)(input),
+        "Field G predictor" => map(parse_dec_as_predictor_list, Frame::FieldGPredictor)(input),
+        "Field H name" => map(parse_str_list, Frame::FieldHName)(input),
+        "Field H signed" => map(parse_dec_as_bool_list, Frame::FieldHSignedness)(input),
+        "Field H encoding" => map(parse_dec_as_encoding_list, Frame::FieldHEncoding)(input),
+        "Field H predictor" => map(parse_dec_as_predictor_list, Frame::FieldHPredictor)(input),
+        name => map(parse_str, |v| Frame::UnkownHeader(name, v))(input),
     }?;
 
     let (input, _) = tag("\n")(input)?;
