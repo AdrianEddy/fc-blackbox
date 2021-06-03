@@ -8,10 +8,7 @@ use num_rational::Ratio;
 
 use crate::stream::predictor::FieldPredictor;
 
-use super::{
-    parse_dec_as_bool_list, parse_dec_as_encoding_list, parse_dec_as_predictor_list, parse_i16_dec,
-    parse_str, parse_str_list, parse_u16_dec, parse_u16_ratio_dec_or_inverse_dec, RawFieldEncoding,
-};
+use super::{RawFieldEncoding, parse_dec_as_bool_list, parse_dec_as_encoding_list, parse_dec_as_predictor_list, parse_i16_dec, parse_str, parse_str_list, parse_u16_dec, parse_u16_ratio_dec_or_inverse_dec, parse_u32_dec, parse_u32_hex};
 
 #[derive(Debug)]
 pub(crate) enum Frame<'f> {
@@ -145,6 +142,8 @@ pub(crate) fn parse_header(input: &[u8]) -> IResult<&[u8], Frame> {
         "Field H signed" => map(parse_dec_as_bool_list, Frame::FieldHSignedness)(input),
         "Field H encoding" => map(parse_dec_as_encoding_list, Frame::FieldHEncoding)(input),
         "Field H predictor" => map(parse_dec_as_predictor_list, Frame::FieldHPredictor)(input),
+        "gyro_scale" => map(parse_u32_hex, |x| { Frame::GyroScale(unsafe { std::mem::transmute(x) })})(input),
+        "looptime" => map(parse_u32_dec, Frame::LoopTime)(input),
         name => map(parse_str, |v| Frame::UnkownHeader(name, v))(input),
     }?;
 

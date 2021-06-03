@@ -44,8 +44,8 @@ pub enum BlackboxReaderError {
 impl<'a> BlackboxReader<'a> {
     pub fn from_bytes(bytes: &'a [u8]) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
         let (remaining_bytes, header) = parse_headers(bytes).map_err(|e| match e {
-            nom::Err::Error(e) => BlackboxReaderError::ParseHeader,
-            nom::Err::Failure(e) => BlackboxReaderError::ParseHeader,
+            nom::Err::Error(_e) => BlackboxReaderError::ParseHeader,
+            nom::Err::Failure(_e) => BlackboxReaderError::ParseHeader,
             nom::Err::Incomplete(_) => BlackboxReaderError::Incomplete,
         })?;
 

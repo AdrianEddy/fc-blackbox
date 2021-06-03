@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-};
+use std::{collections::HashMap, convert::{TryFrom, TryInto}, f32::consts::PI};
 
 use itertools::izip;
 use nom::{
@@ -33,13 +30,15 @@ pub struct Header {
     i_interval: i16,
     p_interval: Ratio<u16>,
     p_ratio: u16,
+    pub gyro_scale: f32,
+    pub loop_time: u32,
 
-    other_headers: HashMap<String, String>,
+    pub other_headers: HashMap<String, String>,
 
-    ip_fields: HashMap<String, IPField>,
-    s_fields: HashMap<String, SlowField>,
-    g_fields: HashMap<String, GNSSField>,
-    h_fields: HashMap<String, GNSSHomeField>,
+    pub ip_fields: HashMap<String, IPField>,
+    pub s_fields: HashMap<String, SlowField>,
+    pub g_fields: HashMap<String, GNSSField>,
+    pub h_fields: HashMap<String, GNSSHomeField>,
 
     pub ip_fields_in_order: Vec<IPField>,
     pub s_fields_in_order: Vec<SlowField>,
@@ -87,6 +86,13 @@ impl TryFrom<HeaderBuilder> for Header {
             .p_interval
             .ok_or(HeaderBuildError::MissingHeader("P interval"))?;
         let p_ratio = builder.p_ratio.unwrap_or(1);
+        let gyro_scale = builder
+            .gyro_scale
+            .ok_or(HeaderBuildError::MissingHeader("gyro_scale"))?;
+        let gyro_scale = gyro_scale * (PI / 180.0) * 0.000001;
+        let loop_time = builder
+            .loop_time
+            .ok_or(HeaderBuildError::MissingHeader("looptime"))?;
 
         let mut ip_fields = HashMap::with_capacity(builder.i_field_names.len());
         let mut ip_fields_in_order = Vec::with_capacity(builder.i_field_names.len());
@@ -287,6 +293,8 @@ impl TryFrom<HeaderBuilder> for Header {
             g_field_predictors,
             h_field_encodings,
             h_field_predictors,
+            gyro_scale,
+            loop_time,
         })
     }
 }
@@ -304,6 +312,8 @@ struct HeaderBuilder {
     i_interval: Option<i16>,
     p_interval: Option<Ratio<u16>>,
     p_ratio: Option<u16>,
+    gyro_scale: Option<f32>,
+    loop_time: Option<u32>,
 
     other_headers: HashMap<String, String>,
 
@@ -354,7 +364,7 @@ pub struct GNSSField {
 }
 
 #[derive(Clone, Debug)]
-struct GNSSHomeField {
+pub struct GNSSHomeField {
     name: String,
     ix: usize,
     signed: bool,
@@ -451,6 +461,12 @@ pub fn parse_headers(input: &[u8]) -> IResult<&[u8], Header, ParseHeadersError<&
                 }
                 Frame::FieldHEncoding(h_field_encoding) => {
                     header.h_field_encoding = h_field_encoding
+                }
+                Frame::GyroScale(gyro_scale) => {
+                    header.gyro_scale = Some(gyro_scale)
+                }
+                Frame::LoopTime(loop_time) => {
+                    header.loop_time = Some(loop_time)
                 }
                 Frame::UnkownHeader(name, value) => {
                     header.other_headers.insert(name.into(), value.into());

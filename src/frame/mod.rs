@@ -262,6 +262,14 @@ fn u16_from_dec(bytes: &[u8]) -> Result<u16, ()> {
     Ok(u16::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 10).map_err(|_| ())?)
 }
 
+fn u32_from_dec(bytes: &[u8]) -> Result<u32, ()> {
+    Ok(u32::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 10).map_err(|_| ())?)
+}
+
+fn u32_from_hex(bytes: &[u8]) -> Result<u32, ()> {
+    Ok(u32::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 16).map_err(|_| ())?)
+}
+
 fn str_from_bytes(bytes: &[u8]) -> Result<&str, ()> {
     std::str::from_utf8(bytes).map_err(|_| ())
 }
@@ -323,11 +331,20 @@ fn parse_u16_dec(input: &[u8]) -> IResult<&[u8], u16> {
     map_res(take_until("\n"), u16_from_dec)(input)
 }
 
+fn parse_u32_dec(input: &[u8]) -> IResult<&[u8], u32> {
+    map_res(take_until("\n"), u32_from_dec)(input)
+}
+
 fn parse_u16_ratio_dec_or_inverse_dec(input: &[u8]) -> IResult<&[u8], Ratio<u16>> {
     alt((
         parse_u16_ratio_dec,
         map(parse_u16_dec, |denom| Ratio::new(1, denom)),
     ))(input)
+}
+
+fn parse_u32_hex(input: &[u8]) -> IResult<&[u8], u32> {
+    let (input, _) = tag("0x")(input)?;
+    map_res(take_until("\n"), u32_from_hex)(input)
 }
 
 fn parse_list<'a, F, T, E: ParseError<&'a [u8]>>(
