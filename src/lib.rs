@@ -85,6 +85,9 @@ impl<'a> BlackboxReader<'a> {
 
     pub fn next(&mut self) -> Option<BlackboxRecord> {
         loop {
+            if self.remaining_bytes.is_empty() {
+                return None;
+            }
             match parse_next_frame(&self.header, self.remaining_bytes) {
                 Ok((remaining_bytes, frame)) => {
                     self.remaining_bytes = remaining_bytes;
