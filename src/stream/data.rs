@@ -23,6 +23,6 @@ pub(crate) fn parse_next_frame<'h, 'i: 'o, 'o>(
         b'H' => map(parse_owned_hframe(&header.h_field_encodings), BodyFrame::HFrame)(input),
         b'E' => parse_body_frame(input),
         0xff => Err(nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Eof))), // 0xff is padding
-        _ => { panic!("Unknown frame {:02x}", input[0]); }
+        _ => Err(nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Verify)))
     }
 }
