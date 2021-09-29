@@ -1,4 +1,4 @@
-use nom::{IResult, bytes::streaming::tag, error::ErrorKind, error::Error};
+use nom::{IResult, bytes::streaming::tag, error::ErrorKind};
 
 use crate::frame::FieldEncoding;
 

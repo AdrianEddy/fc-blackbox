@@ -11,6 +11,7 @@ use crate::stream::predictor::FieldPredictor;
 use super::{RawFieldEncoding, parse_dec_as_bool_list, parse_dec_as_encoding_list, parse_dec_as_predictor_list, parse_i16_dec, parse_str, parse_str_list, parse_u16_dec, parse_u16_ratio_dec_or_inverse_dec, parse_u32_dec, parse_u32_hex};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum Frame<'f> {
     Product(&'f str),
     DataVersion(&'f str),
