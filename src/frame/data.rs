@@ -1,4 +1,4 @@
-use nom::{IResult, bytes::streaming::tag, error::ErrorKind};
+use nom::{bytes::streaming::tag, IResult};
 
 use crate::frame::FieldEncoding;
 
@@ -68,13 +68,6 @@ pub(crate) fn parse_owned_iframe<'a: 'f, 'f, 'i: 'a>(
     field_encodings: &'a [FieldEncoding],
 ) -> impl Fn(&'i [u8]) -> IResult<&'i [u8], OwnedIFrame> + 'f {
     move |input: &'i [u8]| {
-        if field_encodings.is_empty() {
-            return Err(nom::Err::Failure(nom::error::ParseError::from_error_kind(
-                input,
-                ErrorKind::Verify,
-            )));
-        }
-
         let (input, _) = tag("I")(input)?;
         let (input, ret) = parse_owned_frame_payload(field_encodings)(input)?;
         Ok((input, OwnedIFrame { buf: ret }))
@@ -85,13 +78,6 @@ pub(crate) fn parse_owned_pframe<'a: 'f, 'f, 'i: 'a>(
     field_encodings: &'a [FieldEncoding],
 ) -> impl Fn(&'i [u8]) -> IResult<&'i [u8], OwnedPFrame> + 'f {
     move |input: &'i [u8]| {
-        if field_encodings.is_empty() {
-            return Err(nom::Err::Failure(nom::error::ParseError::from_error_kind(
-                input,
-                ErrorKind::Verify,
-            )));
-        }
-
         let (input, _) = tag("P")(input)?;
         let (input, ret) = parse_owned_frame_payload(field_encodings)(input)?;
         Ok((input, OwnedPFrame { buf: ret }))
@@ -102,13 +88,6 @@ pub(crate) fn parse_owned_sframe<'a: 'f, 'f, 'i: 'a>(
     field_encodings: &'a [FieldEncoding],
 ) -> impl Fn(&'i [u8]) -> IResult<&'i [u8], OwnedSFrame> + 'f {
     move |input: &'i [u8]| {
-        if field_encodings.is_empty() {
-            return Err(nom::Err::Failure(nom::error::ParseError::from_error_kind(
-                input,
-                ErrorKind::Verify,
-            )));
-        }
-
         let (input, _) = tag("S")(input)?;
         let (input, ret) = parse_owned_frame_payload(field_encodings)(input)?;
         Ok((input, OwnedSFrame { buf: ret }))
@@ -119,13 +98,6 @@ pub(crate) fn parse_owned_gframe<'a: 'f, 'f, 'i: 'a>(
     field_encodings: &'a [FieldEncoding],
 ) -> impl Fn(&'i [u8]) -> IResult<&'i [u8], OwnedGFrame> + 'f {
     move |input: &'i [u8]| {
-        if field_encodings.is_empty() {
-            return Err(nom::Err::Failure(nom::error::ParseError::from_error_kind(
-                input,
-                ErrorKind::Verify,
-            )));
-        }
-
         let (input, _) = tag("G")(input)?;
         let (input, ret) = parse_owned_frame_payload(field_encodings)(input)?;
         Ok((input, OwnedGFrame { buf: ret }))
@@ -136,13 +108,6 @@ pub(crate) fn parse_owned_hframe<'a: 'f, 'f, 'i: 'a>(
     field_encodings: &'a [FieldEncoding],
 ) -> impl Fn(&'i [u8]) -> IResult<&'i [u8], OwnedHFrame> + 'f {
     move |input: &'i [u8]| {
-        if field_encodings.is_empty() {
-            return Err(nom::Err::Failure(nom::error::ParseError::from_error_kind(
-                input,
-                ErrorKind::Verify,
-            )));
-        }
-
         let (input, _) = tag("H")(input)?;
         let (input, ret) = parse_owned_frame_payload(field_encodings)(input)?;
         Ok((input, OwnedHFrame { buf: ret }))

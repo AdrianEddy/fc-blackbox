@@ -31,7 +31,6 @@ pub struct Header {
     p_interval: Ratio<u16>,
     p_ratio: u16,
     pub gyro_scale: f32,
-    pub org_gyro_scale: f32,
     pub loop_time: u32,
 
     pub other_headers: HashMap<String, String>,
@@ -90,6 +89,7 @@ impl TryFrom<HeaderBuilder> for Header {
         let gyro_scale = builder
             .gyro_scale
             .ok_or(HeaderBuildError::MissingHeader("gyro_scale"))?;
+        let gyro_scale = gyro_scale * (PI / 180.0) * 0.000001;
         let loop_time = builder
             .loop_time
             .ok_or(HeaderBuildError::MissingHeader("looptime"))?;
@@ -293,8 +293,7 @@ impl TryFrom<HeaderBuilder> for Header {
             g_field_predictors,
             h_field_encodings,
             h_field_predictors,
-            gyro_scale: gyro_scale * (PI / 180.0) * 0.000001,
-            org_gyro_scale: gyro_scale,
+            gyro_scale,
             loop_time,
         })
     }
