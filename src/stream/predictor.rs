@@ -144,9 +144,12 @@ impl LogProcessor {
                 Some(LogRecord::Main(self.ip_history.values()))
             }
             BodyFrame::HFrame(OwnedHFrame { buf }) => {
-                assert!(buf.len() == 2);
-                self.gnss_history.gnss_home[0] = buf[0];
-                self.gnss_history.gnss_home[1] = buf[1];
+                if buf.len() == 2 {
+                    self.gnss_history.gnss_home[0] = buf[0];
+                    self.gnss_history.gnss_home[1] = buf[1];
+                } else if buf.len() != 0 {
+                    // TODO: log
+                }
 
                 None
             }

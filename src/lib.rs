@@ -9,7 +9,7 @@ use thiserror::Error;
 
 extern crate itertools;
 
-pub(crate) mod frame;
+pub mod frame;
 pub(crate) mod stream;
 
 pub enum BlackboxRecord<'a> {
@@ -23,6 +23,7 @@ pub enum BlackboxRecord<'a> {
 pub struct BlackboxReader<'a> {
     last_values: Vec<i64>,
     remaining_bytes: &'a [u8],
+    original_length: usize,
     pub header: Header,
     processor: LogProcessor,
     pub last_loop_iteration: i64,
@@ -43,6 +44,7 @@ pub enum BlackboxReaderError {
 
 impl<'a> BlackboxReader<'a> {
     pub fn from_bytes(bytes: &'a [u8]) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
+        let original_length = bytes.len();
         let (remaining_bytes, header) = parse_headers(bytes).map_err(|e| match e {
             nom::Err::Error(_e) => BlackboxReaderError::ParseHeader,
             nom::Err::Failure(_e) => BlackboxReaderError::ParseHeader,
@@ -73,6 +75,7 @@ impl<'a> BlackboxReader<'a> {
 
         Ok(BlackboxReader {
             remaining_bytes,
+            original_length,
             processor: LogProcessor::new(&header),
             last_values,
             loop_iteration_field_ix,
@@ -125,7 +128,100 @@ impl<'a> BlackboxReader<'a> {
             }
         }
     }
+
+    pub fn bytes_read(&self) -> usize {
+        self.original_length - self.remaining_bytes.len()
+    }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use std::{path::{Path, PathBuf}, fs::File, io::Read};
+
+    use crate::BlackboxReader;
+
+    #[derive(Default)]
+    struct LogStats {
+        main: usize,
+        gnss: usize,
+        slow: usize,
+        event: usize,
+        garbage: usize,
+    }
+
+    trait BlackboxReaderExt {
+        fn consume(&mut self) -> LogStats;
+    }
+
+    impl <'a> BlackboxReaderExt for BlackboxReader<'a> {
+        fn consume(&mut self) -> LogStats {
+            let mut stats = LogStats::default();
+
+            while let Some(record) = self.next() {
+                match record {
+                    crate::BlackboxRecord::Main(_) => stats.main += 1,
+                    crate::BlackboxRecord::GNSS(_) => stats.gnss += 1,
+                    crate::BlackboxRecord::Slow(_) => stats.slow += 1,
+                    crate::BlackboxRecord::Event(_) => stats.event += 1,
+                    crate::BlackboxRecord::Garbage(_) => stats.garbage += 1,
+                }
+            }
+
+            stats
+        }
+    }
+
+    fn with_log(filename: impl AsRef<Path>, f: impl Fn(BlackboxReader)) {
+        with_log_result(filename, |r| {
+            f(r);
+            Ok(())
+        }).unwrap()
+    }
+
+    fn with_log_result(filename: impl AsRef<Path>, f: impl Fn(BlackboxReader) -> Result<(), anyhow::Error>) -> Result<(), anyhow::Error> {
+        let filename = filename.as_ref();
+        assert!(filename.is_relative());
+
+        let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).canonicalize()?;
+        root.push("test-data");
+
+        let filename = root.join(filename).canonicalize()?;
+        assert!(filename.starts_with(root));
+
+        let mut buf = Vec::new();
+        File::open(filename)?.read_to_end(&mut buf)?;
+        let reader = BlackboxReader::from_bytes(&buf)?;
+        f(reader)?;
+        Ok(())
+    }
+
+    #[test]
+    fn emuflight_v3_7_0() {
+        with_log("crashing-LOG00002.BFL", |mut r| {
+            let stats = r.consume();
+            assert_eq!(r.remaining_bytes.len(), 0);
+            assert_eq!(stats.main, 171816);
+            assert_eq!(stats.garbage, 0);
+        })
+    }
+
+    #[test]
+    fn betaflight_v4_2_6() {
+        with_log("LOG00002.BFL", |mut r| {
+            let stats = r.consume();
+            assert_eq!(r.remaining_bytes.len(), 0);
+            assert_eq!(stats.main, 222394);
+            assert_eq!(stats.garbage, 0);
+        })
+    }
+
+    #[test]
+    fn inav_v3_0_1() {
+        with_log("LOG00004.TXT", |mut r| {
+            let stats = r.consume();
+            assert_eq!(r.remaining_bytes.len(), 0);
+            assert_eq!(stats.main, 200815);
+            assert_eq!(stats.garbage, 0);
+        })
+    }
+}

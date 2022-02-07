@@ -18,7 +18,7 @@ use num_traits::{WrappingShl, WrappingShr};
 use crate::stream::predictor::FieldPredictor;
 
 pub(crate) mod data;
-pub(crate) mod event;
+pub mod event;
 pub(crate) mod header;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
