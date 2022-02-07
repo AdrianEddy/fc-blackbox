@@ -220,19 +220,26 @@ impl FieldEncoding {
                 (input, Field::SignedQuadruple(values))
             }
             FieldEncoding::Tag8_8SVB(fields_n) => {
-                let (mut input, selectors) = be_u8(input)?;
-
                 let mut values = [0i32; 8];
 
-                for i in 0..*fields_n {
-                    if selectors & (1 << i) != 0 {
-                        let (remaining_input, varint) = take_varint(input)?;
-                        input = remaining_input;
-                        values[i] = zigzag_decode(varint);
-                    }
-                }
+                if *fields_n == 1 {
+                    let (input, varint) = take_varint(input)?;
+                    values[0] = zigzag_decode(varint);
+                    
+                    (input, Field::SignedOctuple(values, *fields_n))
+                } else {
+                    let (mut input, selectors) = be_u8(input)?;
 
-                (input, Field::SignedOctuple(values, *fields_n))
+                    for i in 0..*fields_n {
+                        if selectors & (1 << i) != 0 {
+                            let (remaining_input, varint) = take_varint(input)?;
+                            input = remaining_input;
+                            values[i] = zigzag_decode(varint);
+                        }
+                    }
+
+                    (input, Field::SignedOctuple(values, *fields_n))
+                }
             }
             e => unimplemented!("{:?}", e),
         })
