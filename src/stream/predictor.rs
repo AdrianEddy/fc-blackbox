@@ -68,11 +68,11 @@ impl History {
         }
     }
 
-    pub fn values<'a>(&self) -> &[i64] {
+    pub fn values(&self) -> &[i64] {
         &self.history[self.previous_ix]
     }
 
-    pub fn state<'a>(&'a mut self) -> Snapshot<'a> {
+    pub fn state(&mut self) -> Snapshot {
         Snapshot {
             previous_2: &self.history[self.previous_2_ix],
             previous: &self.history[self.previous_ix],
@@ -91,6 +91,7 @@ impl History {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub enum LogRecord<'a> {
     Main(&'a [i64]),
     GNSS(&'a [i64]),
@@ -123,7 +124,7 @@ impl LogProcessor {
         }
     }
 
-    pub(crate) fn process_frame<'a>(&'a mut self, frame: BodyFrame) -> Option<LogRecord<'a>> {
+    pub(crate) fn process_frame(&mut self, frame: BodyFrame) -> Option<LogRecord> {
         match frame {
             BodyFrame::IFrame(OwnedIFrame { buf }) => {
                 assert_eq!(buf.len(), self.i_predictors.len());
@@ -147,7 +148,7 @@ impl LogProcessor {
                 if buf.len() == 2 {
                     self.gnss_history.gnss_home[0] = buf[0];
                     self.gnss_history.gnss_home[1] = buf[1];
-                } else if buf.len() != 0 {
+                } else if buf.is_empty() {
                     // TODO: log
                 }
 

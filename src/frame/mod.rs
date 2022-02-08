@@ -239,11 +239,11 @@ impl FieldEncoding {
                 } else {
                     let (mut input, selectors) = be_u8(input)?;
 
-                    for i in 0..*fields_n {
+                    for (i, value) in values.iter_mut().enumerate().take(*fields_n) {
                         if selectors & (1 << i) != 0 {
                             let (remaining_input, varint) = take_varint(input)?;
                             input = remaining_input;
-                            values[i] = zigzag_decode(varint);
+                            *value = zigzag_decode(varint);
                         }
                     }
 
@@ -271,19 +271,19 @@ pub(crate) fn parse_body_frame(input: &[u8]) -> IResult<&[u8], BodyFrame> {
 }
 
 fn i16_from_dec(bytes: &[u8]) -> Result<i16, ()> {
-    Ok(i16::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 10).map_err(|_| ())?)
+    std::str::from_utf8(bytes).map_err(|_| ())?.parse().map_err(|_| ())
 }
 
 fn u16_from_dec(bytes: &[u8]) -> Result<u16, ()> {
-    Ok(u16::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 10).map_err(|_| ())?)
+    std::str::from_utf8(bytes).map_err(|_| ())?.parse().map_err(|_| ())
 }
 
 fn u32_from_dec(bytes: &[u8]) -> Result<u32, ()> {
-    Ok(u32::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 10).map_err(|_| ())?)
+    std::str::from_utf8(bytes).map_err(|_| ())?.parse().map_err(|_| ())
 }
 
 fn u32_from_hex(bytes: &[u8]) -> Result<u32, ()> {
-    Ok(u32::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 16).map_err(|_| ())?)
+    u32::from_str_radix(std::str::from_utf8(bytes).map_err(|_| ())?, 16).map_err(|_| ())
 }
 
 fn str_from_bytes(bytes: &[u8]) -> Result<&str, ()> {

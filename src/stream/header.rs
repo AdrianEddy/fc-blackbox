@@ -152,7 +152,7 @@ impl TryFrom<HeaderBuilder> for Header {
             encodings.push(new_encoding);
         }
 
-        for (ix, (name, signedness, i_encoding, p_encoding)) in izip!(
+        for (ix, (name, signed, i_encoding, p_encoding)) in izip!(
             builder.i_field_names,
             builder.i_field_signedness,
             builder.i_field_encoding,
@@ -166,7 +166,7 @@ impl TryFrom<HeaderBuilder> for Header {
             let field = IPField {
                 name: name.clone(),
                 ix,
-                signed: signedness,
+                signed,
             };
             ip_fields.insert(name, field.clone());
             ip_fields_in_order.push(field);
@@ -188,7 +188,7 @@ impl TryFrom<HeaderBuilder> for Header {
         let mut s_fields = HashMap::with_capacity(builder.s_field_names.len());
         let mut s_field_encodings = Vec::with_capacity(builder.s_field_names.len());
         let mut s_fields_in_order = Vec::with_capacity(builder.s_field_names.len());
-        for (ix, (name, signedness, encoding, predictor)) in izip!(
+        for (ix, (name, signed, encoding, predictor)) in izip!(
             builder.s_field_names,
             builder.s_field_signedness,
             builder.s_field_encoding,
@@ -201,7 +201,7 @@ impl TryFrom<HeaderBuilder> for Header {
                 name,
                 ix,
                 predictor,
-                signed: signedness,
+                signed,
             };
             s_fields.insert(field.name.clone(), field.clone());
             s_fields_in_order.push(field);
@@ -212,7 +212,7 @@ impl TryFrom<HeaderBuilder> for Header {
         let mut g_field_predictors = Vec::with_capacity(builder.g_field_names.len());
         let mut g_fields_in_order = Vec::with_capacity(builder.g_field_names.len());
 
-        for (ix, (name, signedness, encoding, predictor)) in izip!(
+        for (ix, (name, signed, encoding, predictor)) in izip!(
             builder.g_field_names,
             builder.g_field_signedness,
             builder.g_field_encoding,
@@ -222,7 +222,7 @@ impl TryFrom<HeaderBuilder> for Header {
         {
             add_encoding(&mut g_field_encodings, encoding);
             let mut name_chars = name.chars();
-            let sub_ix = if let Some(_) = name_chars.find(|&c| c == '[') {
+            let sub_ix = if name_chars.any(|c| c == '[') {
                 name_chars
                     .next()
                     .and_then(|c| c.to_digit(10))
@@ -237,7 +237,7 @@ impl TryFrom<HeaderBuilder> for Header {
                 name,
                 ix,
                 predictor,
-                signed: signedness,
+                signed,
             };
             g_fields.insert(field.name.clone(), field.clone());
             g_fields_in_order.push(field);
@@ -246,7 +246,7 @@ impl TryFrom<HeaderBuilder> for Header {
         let mut h_fields = HashMap::with_capacity(builder.h_field_names.len());
         let mut h_field_encodings = Vec::with_capacity(builder.h_field_names.len());
         let mut h_field_predictors = Vec::with_capacity(builder.h_field_names.len());
-        for (ix, (name, signedness, encoding, predictor)) in izip!(
+        for (ix, (name, signed, encoding, predictor)) in izip!(
             builder.h_field_names,
             builder.h_field_signedness,
             builder.h_field_encoding,
@@ -263,8 +263,8 @@ impl TryFrom<HeaderBuilder> for Header {
                 GNSSHomeField {
                     name,
                     ix,
-                    predictor: predictor,
-                    signed: signedness,
+                    predictor,
+                    signed,
                 },
             );
         }

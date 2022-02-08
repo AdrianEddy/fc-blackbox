@@ -113,7 +113,7 @@ pub struct RollPitchYaw<T: Clone + Copy> {
     yaw: T,
 }
 
-#[allow(unused)]
+#[allow(unused, clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug)]
 pub struct PID<T: Clone + Copy> {
     p: T,
@@ -153,7 +153,7 @@ pub(crate) fn parse_header(input: &[u8]) -> IResult<&[u8], Frame> {
         "Field H encoding" => map(parse_dec_as_encoding_list, Frame::FieldHEncoding)(input),
         "Field H predictor" => map(parse_dec_as_predictor_list, Frame::FieldHPredictor)(input),
         "gyro_scale" => map(parse_u32_hex, |x| {
-            Frame::GyroScale(unsafe { std::mem::transmute(x) })
+            Frame::GyroScale(f32::from_bits(x))
         })(input),
         "looptime" => map(parse_u32_dec, Frame::LoopTime)(input),
         name => map(parse_str, |v| Frame::UnkownHeader(name, v))(input),

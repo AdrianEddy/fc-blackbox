@@ -104,6 +104,7 @@ impl<'a> BlackboxReader<'a> {
         Self::new(bytes, Strictness::Lenient)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<BlackboxRecord> {
         loop {
             match parse_next_frame(&self.header, self.remaining_bytes) {
@@ -132,7 +133,7 @@ impl<'a> BlackboxReader<'a> {
                     nom::Err::Error(e) => match self.strictness {
                         Strictness::Strict => return None,
                         Strictness::Lenient => {
-                            if e.input.len() > 0 {
+                            if !e.input.is_empty() {
                                 self.remaining_bytes = &e.input[1..];
                             }
                         }
