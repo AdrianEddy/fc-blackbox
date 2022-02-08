@@ -14,7 +14,7 @@ fn log_stats() {
 }
 
 #[derive(Deserialize, Serialize)]
-struct SignedLog2Histogram<const N: usize> {
+struct SignedLog2Histogram<const N: usize, const Strict: bool> {
     #[serde(with = "BigArray")]
     neg: [usize; N],
     zero: usize,
@@ -22,7 +22,7 @@ struct SignedLog2Histogram<const N: usize> {
     pos: [usize; N],
 }
 
-impl <const N: usize> SignedLog2Histogram<N> {
+impl <const N: usize, const Strict: bool> SignedLog2Histogram<N, Strict> {
     pub fn push(&mut self, v: i64) {
         if v == 0 {
             self.zero += 1;
@@ -31,7 +31,11 @@ impl <const N: usize> SignedLog2Histogram<N> {
             let v = v.saturating_abs();
             let mut bin = 63usize - v.leading_zeros() as usize;
             if bin >= N {
-                bin = N - 1;
+                if Strict {
+                    panic!("");
+                } else {
+                    bin = N - 1;
+                }
             }
 
             if is_positive {
@@ -43,7 +47,7 @@ impl <const N: usize> SignedLog2Histogram<N> {
     }
 }
 
-impl <const N: usize> Default for SignedLog2Histogram<N> {
+impl <const N: usize, const Strict: bool> Default for SignedLog2Histogram<N, Strict> {
     fn default() -> Self {
         Self { 
             neg: [0usize; N],
@@ -55,7 +59,7 @@ impl <const N: usize> Default for SignedLog2Histogram<N> {
 
 #[test]
 fn signed_histogram_works_for_0() {
-    let mut histo: SignedLog2Histogram<4> = Default::default();
+    let mut histo: SignedLog2Histogram<4, false> = Default::default();
     histo.push(0);
 
     assert_eq!(histo.zero, 1);
@@ -65,7 +69,7 @@ fn signed_histogram_works_for_0() {
 
 #[test]
 fn signed_histogram_works_for_1() {
-    let mut histo: SignedLog2Histogram<4> = Default::default();
+    let mut histo: SignedLog2Histogram<4, false> = Default::default();
     histo.push(1);
 
     assert_eq!(histo.zero, 0);
@@ -75,7 +79,7 @@ fn signed_histogram_works_for_1() {
 
 #[test]
 fn signed_histogram_works_for_second_bucket() {
-    let mut histo: SignedLog2Histogram<4> = Default::default();
+    let mut histo: SignedLog2Histogram<4, false> = Default::default();
     histo.push(2);
     histo.push(3);
 
@@ -86,7 +90,7 @@ fn signed_histogram_works_for_second_bucket() {
 
 #[test]
 fn signed_histogram_works_for_third_bucket() {
-    let mut histo: SignedLog2Histogram<4> = Default::default();
+    let mut histo: SignedLog2Histogram<4, false> = Default::default();
     histo.push(4);
     histo.push(7);
 
@@ -97,7 +101,19 @@ fn signed_histogram_works_for_third_bucket() {
 
 #[test]
 fn signed_histogram_works_for_the_last_bucket() {
-    let mut histo: SignedLog2Histogram<4> = Default::default();
+    let mut histo: SignedLog2Histogram<4, false> = Default::default();
+    histo.push(i64::MAX);
+    histo.push((i64::MAX >> 1) + 1);
+
+    assert_eq!(histo.zero, 0);
+    assert_eq!(histo.neg, [0; 4]);
+    assert_eq!(histo.pos, [0, 0, 0, 2]);
+}
+
+#[test]
+#[should_panic]
+fn strict_signed_histogram_panics_for_the_last_bucket() {
+    let mut histo: SignedLog2Histogram<4, true> = Default::default();
     histo.push(i64::MAX);
     histo.push((i64::MAX >> 1) + 1);
 
@@ -114,7 +130,7 @@ struct LogStats {
     event: usize,
     garbage: usize,
     remaining_bytes: usize,
-    gyro_adc0_histo: SignedLog2Histogram<10>,
+    gyro_adc0_histo: SignedLog2Histogram<32, true>,
 }
 
 trait BlackboxReaderExt {
