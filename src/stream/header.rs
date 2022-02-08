@@ -1,4 +1,8 @@
-use std::{collections::HashMap, convert::{TryFrom, TryInto}, f32::consts::PI};
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+    f32::consts::PI,
+};
 
 use itertools::izip;
 use nom::{
@@ -468,12 +472,8 @@ pub fn parse_headers(input: &[u8]) -> IResult<&[u8], Header, ParseHeadersError<&
                 Frame::FieldHEncoding(h_field_encoding) => {
                     header.h_field_encoding = h_field_encoding
                 }
-                Frame::GyroScale(gyro_scale) => {
-                    header.gyro_scale = Some(gyro_scale)
-                }
-                Frame::LoopTime(loop_time) => {
-                    header.loop_time = Some(loop_time)
-                }
+                Frame::GyroScale(gyro_scale) => header.gyro_scale = Some(gyro_scale),
+                Frame::LoopTime(loop_time) => header.loop_time = Some(loop_time),
                 Frame::UnkownHeader(name, value) => {
                     header.other_headers.insert(name.into(), value.into());
                 }

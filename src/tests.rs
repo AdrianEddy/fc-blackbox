@@ -1,10 +1,10 @@
-use std::{path::Path, fs::File, io::Read};
 use serde_big_array::BigArray;
+use std::{fs::File, io::Read, path::Path};
 
 use insta::{assert_yaml_snapshot, glob};
 use serde::{Deserialize, Serialize};
 
-use crate::{BlackboxReader, MultiSegmentBlackboxReader, BlackboxReaderError};
+use crate::{BlackboxReader, BlackboxReaderError, MultiSegmentBlackboxReader};
 
 #[test]
 fn log_stats() {
@@ -22,7 +22,7 @@ struct SignedLog2Histogram<const N: usize, const STRICT: bool> {
     pos: [usize; N],
 }
 
-impl <const N: usize, const STRICT: bool> SignedLog2Histogram<N, STRICT> {
+impl<const N: usize, const STRICT: bool> SignedLog2Histogram<N, STRICT> {
     pub fn push(&mut self, v: i64) {
         if v == 0 {
             self.zero += 1;
@@ -47,9 +47,9 @@ impl <const N: usize, const STRICT: bool> SignedLog2Histogram<N, STRICT> {
     }
 }
 
-impl <const N: usize, const STRICT: bool> Default for SignedLog2Histogram<N, STRICT> {
+impl<const N: usize, const STRICT: bool> Default for SignedLog2Histogram<N, STRICT> {
     fn default() -> Self {
-        Self { 
+        Self {
             neg: [0usize; N],
             zero: 0,
             pos: [0usize; N],
@@ -137,7 +137,7 @@ trait BlackboxReaderExt {
     fn consume(&mut self) -> LogStats;
 }
 
-impl <'a> BlackboxReaderExt for BlackboxReader<'a> {
+impl<'a> BlackboxReaderExt for BlackboxReader<'a> {
     fn consume(&mut self) -> LogStats {
         let mut stats = LogStats::default();
 
@@ -148,7 +148,7 @@ impl <'a> BlackboxReaderExt for BlackboxReader<'a> {
                 crate::BlackboxRecord::Main(record) => {
                     stats.main += 1;
                     stats.gyro_adc0_histo.push(record[gyro_adc0_field_ix]);
-                },
+                }
                 crate::BlackboxRecord::GNSS(_) => stats.gnss += 1,
                 crate::BlackboxRecord::Slow(_) => stats.slow += 1,
                 crate::BlackboxRecord::Event(_) => stats.event += 1,
@@ -173,12 +173,13 @@ impl<'a> MultiSegmentBlackboxReaderExt for MultiSegmentBlackboxReader<'a> {
 }
 
 fn with_multilog<T>(filename: impl AsRef<Path>, f: impl Fn(MultiSegmentBlackboxReader) -> T) -> T {
-    with_multilog_result(filename, |r| {
-        Ok(f(r))
-    }).unwrap()
+    with_multilog_result(filename, |r| Ok(f(r))).unwrap()
 }
 
-fn with_multilog_result<T>(filename: impl AsRef<Path>, f: impl Fn(MultiSegmentBlackboxReader) -> Result<T, anyhow::Error>) -> Result<T, anyhow::Error> {
+fn with_multilog_result<T>(
+    filename: impl AsRef<Path>,
+    f: impl Fn(MultiSegmentBlackboxReader) -> Result<T, anyhow::Error>,
+) -> Result<T, anyhow::Error> {
     let mut buf = Vec::new();
     File::open(filename)?.read_to_end(&mut buf)?;
     let reader = MultiSegmentBlackboxReader::from_bytes(&buf);
@@ -186,7 +187,5 @@ fn with_multilog_result<T>(filename: impl AsRef<Path>, f: impl Fn(MultiSegmentBl
 }
 
 fn multilog_stats(filename: impl AsRef<Path>) -> Vec<Result<LogStats, BlackboxReaderError>> {
-    with_multilog(filename, |mut r| {
-        r.consume()
-    })
+    with_multilog(filename, |mut r| r.consume())
 }

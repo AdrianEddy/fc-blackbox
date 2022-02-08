@@ -234,7 +234,7 @@ impl FieldEncoding {
                 if *fields_n == 1 {
                     let (input, varint) = take_varint(input)?;
                     values[0] = zigzag_decode(varint);
-                    
+
                     (input, Field::SignedOctuple(values, *fields_n))
                 } else {
                     let (mut input, selectors) = be_u8(input)?;

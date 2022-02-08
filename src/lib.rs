@@ -53,7 +53,10 @@ pub enum BlackboxReaderError {
 }
 
 impl<'a> BlackboxReader<'a> {
-    pub fn new(bytes: &'a [u8], strictness: Strictness) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
+    pub fn new(
+        bytes: &'a [u8],
+        strictness: Strictness,
+    ) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
         let original_length = bytes.len();
         let (remaining_bytes, header) = parse_headers(bytes).map_err(|e| match e {
             nom::Err::Error(_e) => BlackboxReaderError::ParseHeader,
@@ -126,14 +129,14 @@ impl<'a> BlackboxReader<'a> {
                     }
                 }
                 Err(e) => match e {
-                    nom::Err::Error(e) => {
-                        match self.strictness {
-                            Strictness::Strict => return None,
-                            Strictness::Lenient => if e.input.len() > 0 {
+                    nom::Err::Error(e) => match self.strictness {
+                        Strictness::Strict => return None,
+                        Strictness::Lenient => {
+                            if e.input.len() > 0 {
                                 self.remaining_bytes = &e.input[1..];
                             }
                         }
-                    }
+                    },
                     nom::Err::Failure(_) => {
                         return None;
                     }
@@ -168,9 +171,7 @@ impl<'a> MultiSegmentBlackboxReader<'a> {
     }
 
     pub fn successful_only(self) -> impl Iterator<Item = BlackboxReader<'a>> {
-        self.filter_map(|r| {
-            r.ok()
-        })
+        self.filter_map(|r| r.ok())
     }
 }
 
@@ -178,7 +179,9 @@ impl<'a> Iterator for MultiSegmentBlackboxReader<'a> {
     type Item = Result<BlackboxReader<'a>, BlackboxReaderError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let pos = self.remaining_bytes.find_substring(&b"H Product:Blackbox"[..])?;
+        let pos = self
+            .remaining_bytes
+            .find_substring(&b"H Product:Blackbox"[..])?;
         self.remaining_bytes = &self.remaining_bytes[pos..];
         let reader = BlackboxReader::new(self.remaining_bytes, self.strictness);
         if let Ok(reader) = &reader {
