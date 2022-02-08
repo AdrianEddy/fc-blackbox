@@ -1,0 +1,38 @@
+---
+source: src/tests.rs
+assertion_line: 12
+expression: stats(path)
+input_file: src/test-data/LOG00007.BFL
+
+---
+main: 296815
+gnss: 229
+slow: 1408
+event: 54
+garbage: 0
+remaining_bytes: 0
+gyro_adc0_histo:
+  neg:
+    - 838
+    - 17
+    - 27
+    - 95
+    - 5660
+    - 22265
+    - 35163
+    - 31113
+    - 23718
+    - 17144
+  zero: 51301
+  pos:
+    - 25808
+    - 27580
+    - 20384
+    - 18068
+    - 10567
+    - 5236
+    - 538
+    - 5
+    - 8
+    - 1280
+

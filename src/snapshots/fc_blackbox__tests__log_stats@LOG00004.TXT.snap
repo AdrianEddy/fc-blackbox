@@ -1,0 +1,38 @@
+---
+source: src/tests.rs
+assertion_line: 12
+expression: stats(path)
+input_file: src/test-data/LOG00004.TXT
+
+---
+main: 200815
+gnss: 5642
+slow: 2061
+event: 296
+garbage: 0
+remaining_bytes: 0
+gyro_adc0_histo:
+  neg:
+    - 244
+    - 703
+    - 662
+    - 1082
+    - 9677
+    - 26186
+    - 26327
+    - 16282
+    - 8684
+    - 4979
+  zero: 5968
+  pos:
+    - 5252
+    - 8915
+    - 17121
+    - 27354
+    - 27558
+    - 10780
+    - 801
+    - 1561
+    - 557
+    - 122
+
