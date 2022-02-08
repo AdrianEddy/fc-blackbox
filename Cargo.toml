@@ -1,11 +1,12 @@
 [package]
 name = "fc-blackbox"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Ilya Epifanov <elijah.epifanov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2018"
 description = "Parser for flight controllers' balckbox logs"
 repository = "https://github.com/ilya-epifanov/fc-blackbox"
+include = ["/src", "!/src/test-data"]
 
 [dependencies]
 num-traits = "0.2"
@@ -20,4 +21,4 @@ thiserror = "1"
 anyhow = "1"
 insta = { version = "1.12", features = ["glob"] }
 serde = { version = "1", features = ["derive"] }
-serde-big-array = { version = "0.3.2", features = ["const-generics"] }
+serde-big-array = { version = "0.3", features = ["const-generics"] }
