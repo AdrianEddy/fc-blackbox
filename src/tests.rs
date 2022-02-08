@@ -14,7 +14,7 @@ fn log_stats() {
 }
 
 #[derive(Deserialize, Serialize)]
-struct SignedLog2Histogram<const N: usize, const Strict: bool> {
+struct SignedLog2Histogram<const N: usize, const STRICT: bool> {
     #[serde(with = "BigArray")]
     neg: [usize; N],
     zero: usize,
@@ -22,7 +22,7 @@ struct SignedLog2Histogram<const N: usize, const Strict: bool> {
     pos: [usize; N],
 }
 
-impl <const N: usize, const Strict: bool> SignedLog2Histogram<N, Strict> {
+impl <const N: usize, const STRICT: bool> SignedLog2Histogram<N, STRICT> {
     pub fn push(&mut self, v: i64) {
         if v == 0 {
             self.zero += 1;
@@ -31,7 +31,7 @@ impl <const N: usize, const Strict: bool> SignedLog2Histogram<N, Strict> {
             let v = v.saturating_abs();
             let mut bin = 63usize - v.leading_zeros() as usize;
             if bin >= N {
-                if Strict {
+                if STRICT {
                     panic!("");
                 } else {
                     bin = N - 1;
@@ -47,7 +47,7 @@ impl <const N: usize, const Strict: bool> SignedLog2Histogram<N, Strict> {
     }
 }
 
-impl <const N: usize, const Strict: bool> Default for SignedLog2Histogram<N, Strict> {
+impl <const N: usize, const STRICT: bool> Default for SignedLog2Histogram<N, STRICT> {
     fn default() -> Self {
         Self { 
             neg: [0usize; N],
@@ -170,25 +170,6 @@ impl<'a> MultiSegmentBlackboxReaderExt for MultiSegmentBlackboxReader<'a> {
     fn consume(&mut self) -> Vec<Result<LogStats, BlackboxReaderError>> {
         self.map(|r| r.map(|mut r| r.consume())).collect()
     }
-}
-
-fn with_log<T>(filename: impl AsRef<Path>, f: impl Fn(BlackboxReader) -> T) -> T {
-    with_log_result(filename, |r| {
-        Ok(f(r))
-    }).unwrap()
-}
-
-fn with_log_result<T>(filename: impl AsRef<Path>, f: impl Fn(BlackboxReader) -> Result<T, anyhow::Error>) -> Result<T, anyhow::Error> {
-    let mut buf = Vec::new();
-    File::open(filename)?.read_to_end(&mut buf)?;
-    let reader = BlackboxReader::from_bytes(&buf)?;
-    f(reader)
-}
-
-fn stats(filename: impl AsRef<Path>) -> LogStats {
-    with_log(filename, |mut r| {
-        r.consume()
-    })
 }
 
 fn with_multilog<T>(filename: impl AsRef<Path>, f: impl Fn(MultiSegmentBlackboxReader) -> T) -> T {

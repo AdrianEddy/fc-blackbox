@@ -13,6 +13,7 @@ extern crate itertools;
 pub mod frame;
 pub(crate) mod stream;
 
+#[allow(unused)]
 pub enum BlackboxRecord<'a> {
     Main(&'a [i64]),
     GNSS(&'a [i64]),

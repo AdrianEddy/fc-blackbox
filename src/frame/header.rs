@@ -10,6 +10,7 @@ use crate::stream::predictor::FieldPredictor;
 
 use super::{RawFieldEncoding, parse_dec_as_bool_list, parse_dec_as_encoding_list, parse_dec_as_predictor_list, parse_i16_dec, parse_str, parse_str_list, parse_u16_dec, parse_u16_ratio_dec_or_inverse_dec, parse_u32_dec, parse_u32_hex};
 
+#[allow(unused)]
 #[derive(Debug)]
 pub(crate) enum Frame<'f> {
     Product(&'f str),
@@ -78,12 +79,14 @@ pub(crate) enum Frame<'f> {
     UnkownHeader(&'f str, &'f str),
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct BoardInformation<'f> {
     manufacturer_id: &'f str,
     board_name: &'f str,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct VBatCellVoltage {
     min: u16,
@@ -91,12 +94,14 @@ pub struct VBatCellVoltage {
     max: u16,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct CurrentSensor {
     offset: u16,
     scale: i16,
 }
 
+#[allow(unused)]
 #[derive(Clone, Copy, Debug)]
 pub struct RollPitchYaw<T: Clone + Copy> {
     roll: T,
@@ -104,6 +109,7 @@ pub struct RollPitchYaw<T: Clone + Copy> {
     yaw: T,
 }
 
+#[allow(unused)]
 #[derive(Clone, Copy, Debug)]
 pub struct PID<T: Clone + Copy> {
     p: T,

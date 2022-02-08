@@ -17,6 +17,7 @@ use crate::{
     stream::predictor::AnyGPredictor,
 };
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct Header {
     product: String,
@@ -341,6 +342,7 @@ struct HeaderBuilder {
     h_field_predictors: Vec<FieldPredictor>,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct IPField {
     pub name: String,
@@ -348,6 +350,7 @@ pub struct IPField {
     pub signed: bool,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct SlowField {
     pub name: String,
@@ -356,6 +359,7 @@ pub struct SlowField {
     predictor: FieldPredictor,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct GNSSField {
     pub name: String,
@@ -364,6 +368,7 @@ pub struct GNSSField {
     predictor: FieldPredictor,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct GNSSHomeField {
     name: String,

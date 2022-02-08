@@ -21,17 +21,20 @@ pub enum Frame {
     EndOfLog,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct SyncBeep {
     time: u32,
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct FlightMode {
     flags: u32,
     old_flags: u32,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct Disarm {
     reason: u32,
@@ -43,18 +46,21 @@ pub enum Adjustment {
     Int(i32),
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct InFlightAdjustment {
     function: u8,
     adjustment: Adjustment,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct LoggingResume {
     iteration: u32,
     time: u32,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct IMUFailure {
     error_code: u32,
