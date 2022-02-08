@@ -1,0 +1,83 @@
+---
+source: src/tests.rs
+assertion_line: 12
+expression: multilog_stats(path)
+input_file: src/test-data/LOG00037.BFL
+
+---
+- Ok:
+    main: 16774
+    gnss: 86
+    slow: 3
+    event: 3
+    garbage: 0
+    remaining_bytes: 0
+    gyro_adc0_histo:
+      neg:
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 707
+        - 1362
+        - 1465
+        - 1269
+        - 2146
+      zero: 3398
+      pos:
+        - 1728
+        - 1002
+        - 1348
+        - 1694
+        - 592
+        - 63
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+
