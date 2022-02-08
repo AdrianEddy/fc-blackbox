@@ -387,8 +387,7 @@ impl PPredictor for AveragePredictor {
     fn predict(&mut self, value: i64, snapshot: &mut Snapshot<'_>) {
         let p2 = snapshot.previous_2[self.field_ix];
         let p1 = snapshot.previous[self.field_ix];
-        // compute average without overflowing i64
-        let avg = (p1 / 2) + (p2 / 2) + ((p1 % 2 + p2 % 2) / 2);
+        let avg = (p1 + p2) / 2;
         snapshot.current[self.field_ix] = avg + value;
     }
 }

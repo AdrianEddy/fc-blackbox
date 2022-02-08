@@ -76,6 +76,14 @@ fn sign_extend<T: WrappingShl + WrappingShr>(x: T, nbits: u32) -> T {
     x.wrapping_shl(notherbits).wrapping_shr(notherbits)
 }
 
+fn sign_extend_14bit(word: u16) -> i32 {
+    if (word & 0x2000) != 0 {
+        (word | 0xC000) as i16 as i32
+    } else {
+        word as i32
+    }
+}
+
 impl FieldEncoding {
     pub(crate) fn parse<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], Field> {
         Ok(match self {
@@ -90,7 +98,8 @@ impl FieldEncoding {
             }
             FieldEncoding::Negative14BitVB => {
                 let (input, varint) = take_varint(input)?;
-                (input, Field::Signed(-(varint as i32)))
+                // -signExtend14Bit(streamReadUnsignedVB(stream));
+                (input, Field::Signed(-(sign_extend_14bit(varint as u16))))
             }
             FieldEncoding::Tag2_3S32(_) => {
                 let (input, byte1) = be_u8(input)?;
@@ -388,7 +397,7 @@ fn take_varint(input: &[u8]) -> IResult<&[u8], u32> {
         let (remaining_input, byte) = le_u8(input)?;
         input = remaining_input;
         let value = byte & 0b0111_1111;
-        res += (value as u32) << (position * 7);
+        res |= (value as u32) << (position * 7);
         if (byte & 0b1000_0000) == 0 {
             return Ok((input, res));
         }

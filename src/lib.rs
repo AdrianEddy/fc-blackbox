@@ -1,5 +1,6 @@
 use frame::event;
 use itertools::Itertools;
+use nom::FindSubstring;
 use stream::{
     data::parse_next_frame,
     header::{parse_headers, Header},
@@ -20,7 +21,14 @@ pub enum BlackboxRecord<'a> {
     Garbage(usize),
 }
 
+#[derive(Copy, Clone)]
+pub enum Strictness {
+    Strict,
+    Lenient,
+}
+
 pub struct BlackboxReader<'a> {
+    strictness: Strictness,
     last_values: Vec<i64>,
     remaining_bytes: &'a [u8],
     original_length: usize,
@@ -33,6 +41,7 @@ pub struct BlackboxReader<'a> {
 }
 
 #[derive(Error, Debug)]
+#[cfg_attr(test, derive(serde::Serialize))]
 pub enum BlackboxReaderError {
     #[error("couldn't parse header")]
     ParseHeader,
@@ -43,7 +52,7 @@ pub enum BlackboxReaderError {
 }
 
 impl<'a> BlackboxReader<'a> {
-    pub fn from_bytes(bytes: &'a [u8]) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
+    pub fn new(bytes: &'a [u8], strictness: Strictness) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
         let original_length = bytes.len();
         let (remaining_bytes, header) = parse_headers(bytes).map_err(|e| match e {
             nom::Err::Error(_e) => BlackboxReaderError::ParseHeader,
@@ -83,7 +92,12 @@ impl<'a> BlackboxReader<'a> {
             header,
             last_loop_iteration: 0,
             last_time: 0,
+            strictness,
         })
+    }
+
+    pub fn from_bytes(bytes: &'a [u8]) -> Result<BlackboxReader<'a>, BlackboxReaderError> {
+        Self::new(bytes, Strictness::Lenient)
     }
 
     pub fn next(&mut self) -> Option<BlackboxRecord> {
@@ -112,14 +126,15 @@ impl<'a> BlackboxReader<'a> {
                 }
                 Err(e) => match e {
                     nom::Err::Error(e) => {
-                        if e.input.len() > 0 {
-                            self.remaining_bytes = &e.input[1..];
+                        match self.strictness {
+                            Strictness::Strict => return None,
+                            Strictness::Lenient => if e.input.len() > 0 {
+                                self.remaining_bytes = &e.input[1..];
+                            }
                         }
                     }
-                    nom::Err::Failure(e) => {
-                        if e.input.len() > 0 {
-                            self.remaining_bytes = &e.input[1..];
-                        }
+                    nom::Err::Failure(_) => {
+                        return None;
                     }
                     nom::Err::Incomplete(_) => {
                         return None;
@@ -131,6 +146,46 @@ impl<'a> BlackboxReader<'a> {
 
     pub fn bytes_read(&self) -> usize {
         self.original_length - self.remaining_bytes.len()
+    }
+}
+
+pub struct MultiSegmentBlackboxReader<'a> {
+    remaining_bytes: &'a [u8],
+    strictness: Strictness,
+}
+
+impl<'a> MultiSegmentBlackboxReader<'a> {
+    pub fn new(bytes: &'a [u8], strictness: Strictness) -> Self {
+        Self {
+            remaining_bytes: bytes,
+            strictness,
+        }
+    }
+
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        Self::new(bytes, Strictness::Lenient)
+    }
+
+    pub fn successful_only(self) -> impl Iterator<Item = BlackboxReader<'a>> {
+        self.filter_map(|r| {
+            r.ok()
+        })
+    }
+}
+
+impl<'a> Iterator for MultiSegmentBlackboxReader<'a> {
+    type Item = Result<BlackboxReader<'a>, BlackboxReaderError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let pos = self.remaining_bytes.find_substring(&b"H Product:Blackbox"[..])?;
+        self.remaining_bytes = &self.remaining_bytes[pos..];
+        let reader = BlackboxReader::new(self.remaining_bytes, self.strictness);
+        if let Ok(reader) = &reader {
+            self.remaining_bytes = &self.remaining_bytes[reader.bytes_read()..];
+        } else {
+            self.remaining_bytes = &self.remaining_bytes[1..];
+        }
+        Some(reader)
     }
 }
 

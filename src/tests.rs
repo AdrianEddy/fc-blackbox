@@ -4,12 +4,12 @@ use serde_big_array::BigArray;
 use insta::{assert_yaml_snapshot, glob};
 use serde::{Deserialize, Serialize};
 
-use crate::BlackboxReader;
+use crate::{BlackboxReader, MultiSegmentBlackboxReader, BlackboxReaderError};
 
 #[test]
 fn log_stats() {
     glob!("test-data/*", |path| {
-        assert_yaml_snapshot!(stats(path));
+        assert_yaml_snapshot!(multilog_stats(path));
     });
 }
 
@@ -162,6 +162,16 @@ impl <'a> BlackboxReaderExt for BlackboxReader<'a> {
     }
 }
 
+trait MultiSegmentBlackboxReaderExt {
+    fn consume(&mut self) -> Vec<Result<LogStats, BlackboxReaderError>>;
+}
+
+impl<'a> MultiSegmentBlackboxReaderExt for MultiSegmentBlackboxReader<'a> {
+    fn consume(&mut self) -> Vec<Result<LogStats, BlackboxReaderError>> {
+        self.map(|r| r.map(|mut r| r.consume())).collect()
+    }
+}
+
 fn with_log<T>(filename: impl AsRef<Path>, f: impl Fn(BlackboxReader) -> T) -> T {
     with_log_result(filename, |r| {
         Ok(f(r))
@@ -177,6 +187,25 @@ fn with_log_result<T>(filename: impl AsRef<Path>, f: impl Fn(BlackboxReader) -> 
 
 fn stats(filename: impl AsRef<Path>) -> LogStats {
     with_log(filename, |mut r| {
+        r.consume()
+    })
+}
+
+fn with_multilog<T>(filename: impl AsRef<Path>, f: impl Fn(MultiSegmentBlackboxReader) -> T) -> T {
+    with_multilog_result(filename, |r| {
+        Ok(f(r))
+    }).unwrap()
+}
+
+fn with_multilog_result<T>(filename: impl AsRef<Path>, f: impl Fn(MultiSegmentBlackboxReader) -> Result<T, anyhow::Error>) -> Result<T, anyhow::Error> {
+    let mut buf = Vec::new();
+    File::open(filename)?.read_to_end(&mut buf)?;
+    let reader = MultiSegmentBlackboxReader::from_bytes(&buf);
+    f(reader)
+}
+
+fn multilog_stats(filename: impl AsRef<Path>) -> Vec<Result<LogStats, BlackboxReaderError>> {
+    with_multilog(filename, |mut r| {
         r.consume()
     })
 }
