@@ -22,7 +22,7 @@ pub enum BlackboxRecord<'a> {
     Garbage(usize),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Strictness {
     Strict,
     Lenient,
