@@ -244,7 +244,7 @@ pub(crate) struct AddConstantPredictor {
 
 impl IPredictor for AddConstantPredictor {
     fn predict(&self, value: i64, snapshot: &mut Snapshot<'_>) {
-        snapshot.current[self.field_ix] = (self.base + value) as i32 as i64;
+        snapshot.current[self.field_ix] = (self.base + value) as i64;
     }
 }
 
